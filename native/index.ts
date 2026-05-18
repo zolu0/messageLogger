@@ -21,6 +21,15 @@ import { ensureDirectoryExists, getAttachmentIdFromFilename, sleep } from "./uti
 
 export { getSettings };
 
+const DISCORD_WEBHOOK_URL_RE = /^https:\/\/(?:discord\.com|discordapp\.com)\/api\/webhooks\/\d+\/[\w-]+(?:\?.*)?$/;
+
+export interface NativeWebhookResponse {
+    ok: boolean;
+    status: number;
+    statusText: string;
+    body: string;
+}
+
 // so we can filter the native helpers by this key
 export function messageLoggerEnhancedUniqueIdThingyIdkMan() { }
 
@@ -143,6 +152,43 @@ export async function chooseFile(_event: IpcMainInvokeEvent, title: string, filt
     if (!path) throw Error("Invalid file");
 
     return await readFile(path, "utf-8");
+}
+
+export async function sendWebhookNative(_event: IpcMainInvokeEvent, webhookUrl: string, payload: string): Promise<NativeWebhookResponse> {
+    const trimmedWebhookUrl = webhookUrl.trim();
+
+    if (!DISCORD_WEBHOOK_URL_RE.test(trimmedWebhookUrl)) {
+        return {
+            ok: false,
+            status: 0,
+            statusText: "Invalid Discord webhook URL",
+            body: ""
+        };
+    }
+
+    try {
+        const res = await fetch(trimmedWebhookUrl, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+            },
+            body: payload,
+        });
+
+        return {
+            ok: res.ok,
+            status: res.status,
+            statusText: res.statusText,
+            body: await res.text(),
+        };
+    } catch (error) {
+        return {
+            ok: false,
+            status: -1,
+            statusText: "Request failed",
+            body: String(error),
+        };
+    }
 }
 
 // doing it in native because you can only fetch images from the renderer

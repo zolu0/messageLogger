@@ -32,6 +32,7 @@ import { doesMatch } from "./utils/parseQuery";
 import * as imageUtils from "./utils/saveImage";
 import * as ImageManager from "./utils/saveImage/ImageManager";
 import { checkForUpdatesAndNotify } from "./utils/updater";
+import { sendToWebhook } from "./webhooks";
 export { settings };
 
 export const Flogger = new Logger("MessageLoggerEnhanced", "#f26c6c");
@@ -93,11 +94,16 @@ async function messageDeleteHandler(payload: MessageDeletePayload & { isBulk: bo
 
 
         if (message == null || message.channel_id == null || !message.deleted) return;
-        // Flogger.log("ADDING MESSAGE (DELETED)", message);
-        if (payload.isBulk)
-            return message;
+         // Flogger.log("ADDING MESSAGE (DELETED)", message);
+         if (payload.isBulk)
+             return message;
 
-        await addMessage(message, ghostPinged ? idb.DBMessageStatus.GHOST_PINGED : idb.DBMessageStatus.DELETED);
+         await addMessage(message, ghostPinged ? idb.DBMessageStatus.GHOST_PINGED : idb.DBMessageStatus.DELETED);
+         
+         // Send to webhook if enabled
+         if (settings.store.sendToWebhook && settings.store.webhookUrl) {
+             await sendToWebhook(settings.store.webhookUrl, message, ghostPinged ? idb.DBMessageStatus.GHOST_PINGED : idb.DBMessageStatus.DELETED);
+         }
     }
     finally {
         handledMessageIds.delete(payload.id);
@@ -162,6 +168,11 @@ async function messageUpdateHandler(payload: MessageUpdatePayload) {
 
     // Flogger.log("ADDING MESSAGE (EDITED)", message, payload);
     await addMessage(message, idb.DBMessageStatus.EDITED);
+
+    // Send to webhook if enabled
+    if (settings.store.sendToWebhook && settings.store.webhookUrl) {
+        await sendToWebhook(settings.store.webhookUrl, message as LoggedMessageJSON, idb.DBMessageStatus.EDITED);
+    }
 }
 
 function messageCreateHandler(payload: MessageCreatePayload) {

@@ -169,7 +169,32 @@ export function getNative(): PluginNative<typeof import("../native")> {
             writeNativeLogChunk: async () => { },
             startNativeLogImport: async () => "" as any,
             readNativeLogChunk: async () => null,
-            closeNativeLogImport: async () => { }
+            closeNativeLogImport: async () => { },
+            sendWebhookNative: async (webhookUrl: string, payload: string) => {
+                try {
+                    const res = await fetch(webhookUrl, {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json",
+                        },
+                        body: payload,
+                    });
+
+                    return {
+                        ok: res.ok,
+                        status: res.status,
+                        statusText: res.statusText,
+                        body: await res.text(),
+                    };
+                } catch (error) {
+                    return {
+                        ok: false,
+                        status: -1,
+                        statusText: "Request failed",
+                        body: String(error),
+                    };
+                }
+            }
         } satisfies PluginNative<typeof import("../native")>;
 
         return Native;

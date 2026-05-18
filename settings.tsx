@@ -9,8 +9,8 @@ import { Button } from "@components/Button";
 import ErrorBoundary from "@components/ErrorBoundary";
 import { OptionType } from "@utils/types";
 import { Alerts, useState } from "@webpack/common";
-
 import { Native } from ".";
+import { WebhookTestButton } from "./components/WebhookTestButton";
 import { openLogModal } from "./components/LogsModal";
 import { ImageCacheDir, LogsDir } from "./components/settings/FolderSelectInput";
 import { openUpdaterModal } from "./components/UpdaterModal";
@@ -77,6 +77,24 @@ export const settings = definePluginSettings({
         type: OptionType.BOOLEAN,
         description: "Save deleted attachments.",
         default: false
+    },
+
+    sendToWebhook: {
+        type: OptionType.BOOLEAN,
+        description: "Send logged messages to a Discord webhook.",
+        default: false
+    },
+
+    webhookUrl: {
+        type: OptionType.STRING,
+        description: "Discord webhook URL to send logs to. Get this from your server webhook settings.",
+        default: "",
+    },
+
+    testWebhook: {
+        type: OptionType.COMPONENT,
+        description: "Test the webhook connection",
+        component: ErrorBoundary.wrap(() => <WebhookTestButton webhookUrl={settings.store.webhookUrl} />) as any
     },
 
     sortNewest: {
