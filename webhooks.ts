@@ -198,7 +198,7 @@ function formatMessageForWebhook(message: LoggedMessageJSON, status: DBMessageSt
 
     return {
         embeds,
-        username: "Message Logger",
+        username: "mmm",
         allowed_mentions: {
             parse: [],
         },
