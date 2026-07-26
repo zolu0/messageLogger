@@ -43,20 +43,36 @@ const cacheThing = findByPropsLazy("commit", "getOrCreate");
 
 let oldGetMessage: typeof MessageStore.getMessage;
 
-const handledMessageIds = new Set();
+const handledMessageIds = new Set<string>();
+const completedDeletionIds = new Set<string>();
+const completedDeletionQueue: string[] = [];
+const MAX_COMPLETED_DELETIONS = 10_000;
+
+function rememberCompletedDeletion(key: string) {
+    if (completedDeletionIds.has(key)) return;
+
+    completedDeletionIds.add(key);
+    completedDeletionQueue.push(key);
+
+    if (completedDeletionQueue.length > MAX_COMPLETED_DELETIONS) {
+        completedDeletionIds.delete(completedDeletionQueue.shift()!);
+    }
+}
+
 async function messageDeleteHandler(payload: MessageDeletePayload & { isBulk: boolean; }) {
     if (payload.mlDeleted) return;
 
-    // Discord can dispatch the same deletion more than once. The in-flight set
-    // only catches overlapping handlers; once the first handler has completed,
-    // use the persisted deleted message to suppress later copies as well.
-    if (handledMessageIds.has(payload.id) || idb.cachedMessages.get(payload.id)?.deleted) {
+    const deletionKey = `${payload.channelId}:${payload.id}`;
+
+    // Keep event deduplication separate from persisted logs. Persisted messages
+    // may be evicted by messageLimit while Discord can still replay the event.
+    if (handledMessageIds.has(deletionKey) || completedDeletionIds.has(deletionKey)) {
         // Flogger.warn("skipping duplicate message", payload.id);
         return;
     }
 
     try {
-        handledMessageIds.add(payload.id);
+        handledMessageIds.add(deletionKey);
 
         let message: LoggedMessage | LoggedMessageJSON | null =
             oldGetMessage?.(payload.channelId, payload.id);
@@ -93,8 +109,10 @@ async function messageDeleteHandler(payload: MessageDeletePayload & { isBulk: bo
 
         if (message == null || message.channel_id == null || !message.deleted) return;
          // Flogger.log("ADDING MESSAGE (DELETED)", message);
-         if (payload.isBulk)
+         if (payload.isBulk) {
+             rememberCompletedDeletion(deletionKey);
              return message;
+         }
 
          await addMessage(message, ghostPinged ? idb.DBMessageStatus.GHOST_PINGED : idb.DBMessageStatus.DELETED);
          
@@ -102,9 +120,11 @@ async function messageDeleteHandler(payload: MessageDeletePayload & { isBulk: bo
          if (settings.store.sendToWebhook && settings.store.webhookUrl) {
              await sendToWebhook(settings.store.webhookUrl, message, ghostPinged ? idb.DBMessageStatus.GHOST_PINGED : idb.DBMessageStatus.DELETED);
          }
+
+         rememberCompletedDeletion(deletionKey);
     }
     finally {
-        handledMessageIds.delete(payload.id);
+        handledMessageIds.delete(deletionKey);
     }
 }
 
