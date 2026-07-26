@@ -47,7 +47,10 @@ const handledMessageIds = new Set();
 async function messageDeleteHandler(payload: MessageDeletePayload & { isBulk: boolean; }) {
     if (payload.mlDeleted) return;
 
-    if (handledMessageIds.has(payload.id)) {
+    // Discord can dispatch the same deletion more than once. The in-flight set
+    // only catches overlapping handlers; once the first handler has completed,
+    // use the persisted deleted message to suppress later copies as well.
+    if (handledMessageIds.has(payload.id) || idb.cachedMessages.get(payload.id)?.deleted) {
         // Flogger.warn("skipping duplicate message", payload.id);
         return;
     }
